@@ -1,0 +1,11 @@
+*.swp
+*.out
+*.o
+*.bin
+*.list
+*.a
+tags
+*.DS_STORE*
+**/objs/
+cscope.files
+bin/
