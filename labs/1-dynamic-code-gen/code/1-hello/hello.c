@@ -95,8 +95,23 @@ static inline uint32_t
 armv6_ldr(uint32_t dst_reg, uint32_t src_reg, uint32_t off) {
     assert(dst_reg<16);
     assert(src_reg<16);
-    todo("return the machine code to: ldr <dst>, [<src>+#<off>]\n");
     uint32_t code = 0;
+
+	/*	argument goes to r0
+		00008050 <hello1>:
+			8050:	e92d4010 	push	{r4, lr}
+			8054:	e59f0004 	ldr	r0, [pc, #4]	; 8060 <hello1+0x10>
+			8058:	eb000020 	bl	80e0 <printk>
+			805c:	e8bd8010 	pop	{r4, pc}
+			8060:	00008d00 	.word	0x00008d00
+	*/
+	code = 0xe5900000;
+
+	code |= (src_reg << 16);
+	code |= (dst_reg << 12);
+	code |= off;
+
+	return code;
 }
 
 // generate a dynamic call to hello() 
@@ -110,6 +125,7 @@ void jit_hello(void *fn, void * arg) {
         pc = 15,
         sp = 13,
         r0 = 0,
+		r1 = 1,
     };
 
     uint32_t addr =(uint32_t)fn;
@@ -129,13 +145,31 @@ void jit_hello(void *fn, void * arg) {
     // you can look at <prelab-code-pi/4-derive-pc-reg.c>
     // or also read the manual :)
     if(arg) {
-        todo("extend this code to handle a 32-bit argument!\n");
+			// (tt): wrong. By the time fp()
+			// is called, what stores in r1 
+			// may be trashed.
+			//
+			// hello1 does this for printk()
+			// but in such case the arg is in rodata
+			// 8054:	e59f0004 	ldr	r0, [pc, #4]	; 8060 <hello1+0x10>
+			//
+			// hacky: we know there are
+			// {bl, pop, bx, "stored arg" <- never reached}
+			// pc is the addr of ldr + 8, we + 8 more to get the stored arg
+			// TODO: store 0 here. remember the location of this relative to
+			// code[]. And once you get to the store arg,
+			// do the patching.
+			code[n++] = armv6_ldr(r0, pc, 8);
     }
 
     uint32_t src = (uint32_t)&code[n];
     code[n++] = armv6_bl(src, addr);
     code[n++] = armv6_pop(lr);
     code[n++] = armv6_bx(lr);
+
+	// hacky: store the arg here
+	if (arg)
+		code[n++] = (uint32_t) arg;
 
     printk("emitted code at %x to call routine (%x):\n", code, addr);
     for(int i = 0; i < 4; i++) 
