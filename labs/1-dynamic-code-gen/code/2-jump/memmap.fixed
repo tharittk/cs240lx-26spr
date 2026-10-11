@@ -1,15 +1,38 @@
 /* 
  * We hardwire it to link at <LINK_ADDR>; it's easy to change
  * so the linking is parameterized.   
- * 
  * XXX: Make sure you jump to <LINK_ADDR+SIZEOF(.crt0_header)> when going 
  * to run the code!
- */
+*/
+
 LINK_ADDR = 0x8000;
 SECTIONS
 {
-    /* our simple a.out header.  will add as needed. */
+ /* our simple a.out header.  will add as needed. */
     .crt0_header LINK_ADDR : {
+		/* jump instruction to _start (0x8040) = 0x8000 + 64 bytes */
+		/* 0xe a(1010), imm = target - (b _pc + 8) then right shift 2*/
+		/* 8040 - (8000 + 8) = 0x38, do right shift 0b11 1000 = 0b1110 = 14 (e)*/
+        LONG(0xEA00000E)
+        /* Be careful, if you want to encode byte-by-byte, ARM is little endian */
+        /* the LSB is store at the lowest mem addr so you're better do */
+		/*
+        BYTE(0xE)
+        BYTE(0x0)
+        BYTE(0x0)
+        BYTE(0xEA)
+		*/
+
+
+		/* hello */
+		__hello_string__ = .;
+		BYTE(0x68) /* 'h' */
+        BYTE(0x65) /* 'e' */
+        BYTE(0x6c) /* 'l' */
+        BYTE(0x6c) /* 'l' */
+        BYTE(0x6f) /* 'o' */
+        BYTE(0x00) /* '\0' */
+
         /* magic cookie for sanity checking */
         LONG(0x12345678);
 
@@ -30,6 +53,8 @@ SECTIONS
         LONG(SIZEOF(.text) + SIZEOF(.data) + SIZEOF(.rodata) );
 
         /* can add stuff below and loader should still work */
+
+		. = ALIGN(64);
     }
 	.text :  { KEEP(*(.text.boot))  *(.text*) }
     .data :   { . = ALIGN(4); *(.data*)   . = ALIGN(4); } 
