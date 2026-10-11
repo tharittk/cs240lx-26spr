@@ -30,23 +30,65 @@ static void guard3(void) { asm volatile ("bkpt"); }
 
 // the routines to implement.
 static inline uint32_t armv6_push(int reg) {
+	// (tt):	e52de004	push    {lr}	; (str lr, [sp, #-4]!)
     assert(reg<16);
-    todo("return the machine code to push{reg}\n");
+    uint32_t code = 0xe52de004;
+    // d = 13 (sp), e = 14 (lr)
+    // we then replace e with reg
+    code &= ~0xf000;
+    code |= (reg << 12);
+    return code;
 }
 static inline uint32_t armv6_pop(int reg) {
+    // (tt):	e8bd8010        pop     {r4, pc}
     assert(reg<16);
-    todo("return the machine code to pop{reg}\n");
+	// 8010 is a register bit mask (1000 <0> 0001 <0>)
+	// which means reg 15 and reg 4 are selected.
+	uint32_t code = 0xe8bd8010;
+	code &= ~0xffff;
+	code |= (1 << reg);
+	return code;
 }
 
 // pc = where the instruction will be put.  this is 
 // needed so that you can compute the offset from <pc>
 // to <addr> which is what gets put in <bl>
 static inline uint32_t armv6_bl(uint32_t bl_pc, uint32_t target) {
-    todo("return the machine code bl to <addr>\n");
+	/* (tt): 8058: eb000020 bl 80e0 <printk>
+	 * e is AL (cond)
+	 * b is 1011 (L = 1)
+	 * signed immed 24 = 000020 while target_addr = 80e0
+	 * from armv6,  target_addr = 
+	 *		- sign_extend(0x20) -- still 0x20
+	 *		- shift left 2 bit -- 0x80
+	 *		- add this to pc (bl location + 8);
+	 *			-- 0x8058 + 0x8 = 0x8060; 0x8060+0x80 = 0x80e0
+	 *		sanity checked !
+	 */
+
+    uint32_t code = 0;
+
+	/* Now we want to reverse that (goes from target to sign imm 24)
+    * bit 23:0 is to construct signed immed 24 from target, follow A4.1.5 
+    * subtract (pc+8), right shift 2, remove sign extension .
+    */
+    uint32_t imm;
+    imm = target - (bl_pc + 8);
+    imm = (imm >> 2);
+
+    code = (0xE << 28) | (0b1011 << 24) | (0xffffff & imm);
+    return code;
 }
+
 static inline uint32_t armv6_bx(uint32_t reg) {
     assert(reg<16);
-    todo("return the machine code to bx <reg>\n");
+	// (tt): <printk>
+	// e12fff1e; bx lr (lr = 14 = e)
+	uint32_t code = 0xe12fff1e;
+	code &= ~0b0000;
+	code |= reg;
+
+    return code;
 }
 
 static inline uint32_t 
@@ -54,6 +96,7 @@ armv6_ldr(uint32_t dst_reg, uint32_t src_reg, uint32_t off) {
     assert(dst_reg<16);
     assert(src_reg<16);
     todo("return the machine code to: ldr <dst>, [<src>+#<off>]\n");
+    uint32_t code = 0;
 }
 
 // generate a dynamic call to hello() 
@@ -77,6 +120,9 @@ void jit_hello(void *fn, void * arg) {
     //      call (bl) will trash it.
     //   2. need to make sure you sign extend <addr> in bl
     //      correctly so that it works with a negative offset!
+    //  (tt): to be clear, this current lr we are saving
+    //  is the returned address of the caller of this 
+    //  (think about nested call).
     code[n++] = armv6_push(lr);
 
     // to see what value the pc register has when you read it
