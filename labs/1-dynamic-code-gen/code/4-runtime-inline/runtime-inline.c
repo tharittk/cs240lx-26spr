@@ -49,7 +49,6 @@ uint32_t GET32_inline_helper(uint32_t addr, uint32_t lr) {
 // go through and rewrite similar to GET32_inline -- you have to 
 // modify <runtime-inline-asm.S> as well.
 void PUT32_inline_helper(uint32_t addr, uint32_t val, uint32_t lr) {
-    inline_on_p = 0;
     if(inline_on_p) {
         uint32_t pc = lr - 4;
 
@@ -150,6 +149,36 @@ void test_get32_10(void) {
     GET32(0);
 }
 
+void test_put32_inline_10(void) {
+    uint32_t x;
+    PUT32_inline((uint32_t)&x, 0);
+    PUT32_inline((uint32_t)&x, 1);
+    PUT32_inline((uint32_t)&x, 2);
+    PUT32_inline((uint32_t)&x, 3);
+    PUT32_inline((uint32_t)&x, 4);
+
+    PUT32_inline((uint32_t)&x, 5);
+    PUT32_inline((uint32_t)&x, 6);
+    PUT32_inline((uint32_t)&x, 7);
+    PUT32_inline((uint32_t)&x, 8);
+    PUT32_inline((uint32_t)&x, 9);
+}
+
+void test_put32_10(void) {
+    uint32_t x;
+    PUT32((uint32_t)&x, 0);
+    PUT32((uint32_t)&x, 1);
+    PUT32((uint32_t)&x, 2);
+    PUT32((uint32_t)&x, 3);
+    PUT32((uint32_t)&x, 4);
+
+    PUT32((uint32_t)&x, 5);
+    PUT32((uint32_t)&x, 6);
+    PUT32((uint32_t)&x, 7);
+    PUT32((uint32_t)&x, 8);
+    PUT32((uint32_t)&x, 9);
+}
+
 // we time things a bunch of different ways.
 void notmain(void) {
     assert(!inline_cnt);
@@ -220,5 +249,48 @@ void notmain(void) {
     output("time to run 10 times non-inlined:   %d\n", t_run10);
     output("total inline count=%d\n", inline_cnt);
 
-    todo("now implement the same thing for PUT32\n");
+    output("about to test put32 inlining\n");
+    inline_on_p = 1;
+    t_inline       = TIME_CYC(test_put32_inline(1));
+    t_inline_run10 = TIME_CYC(test_put32_inline(100));
+    t_run10        = TIME_CYC(test_put32(100));
+    inline_on_p = 0;
+
+    output("time to run w/ inlining overhead:   %d\n", t_inline);
+    output("time to run 100 times inlined:      %d\n", t_inline_run10);
+    output("time to run 100 times non-inlined:  %d\n", t_run10);
+    output("total inline count=%d\n", inline_cnt);
+
+    output("about to test put32 inlining without loop or checking\n");
+    inline_on_p = 1;
+    t_inline       = TIME_CYC(test_put32_inline_10());
+    t_inline_run10 = TIME_CYC(test_put32_inline_10());
+    t_run10        = TIME_CYC(test_put32_10());
+    inline_on_p = 0;
+
+    output("time to run w/ inlining overhead:   %d\n", t_inline);
+    output("time to run 10 times inlined:       %d\n", t_inline_run10);
+    output("time to run 10 times non-inlined:   %d\n", t_run10);
+    output("total inline count=%d\n", inline_cnt);
+
+    uint32_t *put_pc = (void *)PUT32;
+    imm = (uint32_t)PUT32_inline - ((uint32_t)put_pc + 8);
+    imm = (imm >> 2);
+    code = (0xE << 28) | (0xa << 24) | (0xffffff & imm);
+    *put_pc = code;
+    *(put_pc + 1) = 0xE1A00000;
+
+    output("after rewriting put32!\n");
+    output("    inst[0] = %x\n", put_pc[0]);
+    output("    inst[1] = %x\n", put_pc[1]);
+    inline_on_p = 1;
+    t_inline       = TIME_CYC(test_put32_10());
+    t_inline_run10 = TIME_CYC(test_put32_inline_10());
+    t_run10        = TIME_CYC(test_put32_10());
+    inline_on_p = 0;
+
+    output("time to run w/ inlining overhead:   %d\n", t_inline);
+    output("time to run 10 times inlined:       %d\n", t_inline_run10);
+    output("time to run 10 times after inlining: %d\n", t_run10);
+    output("total inline count=%d\n", inline_cnt);
 }
