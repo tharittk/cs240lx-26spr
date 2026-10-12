@@ -30,10 +30,9 @@ static int inline_on_p = 0, inline_cnt = 0;
 // bytes past the call instruction to GET32_inline
 uint32_t GET32_inline_helper(uint32_t addr, uint32_t lr) {
     if(inline_on_p) {
-        todo("smash the call instruction to just do: ldr r0, [r0]\n");
         uint32_t pc = lr - 4;
 
-		*(uint32_t *)pc = 0; // ldr r0, [r0] binary;
+		*(uint32_t *)pc = 0xe5900000; // ldr r0, [r0] binary;
 
         inline_cnt++;
 
@@ -54,16 +53,16 @@ void PUT32_inline_helper(uint32_t addr, uint32_t val, uint32_t lr) {
     if(inline_on_p) {
         uint32_t pc = lr - 4;
 
-		*(uint32_t *)pc = 0; // str r1, [r0] binary;
+		*(uint32_t *)pc = 0xe5801000; // str r1, [r0] binary;
 
         inline_cnt++;
 
         inline_on_p = 0;
         output("PUT: rewriting address=%x, inline count=%d\n", pc, inline_cnt);
         inline_on_p = 1;
-    } else {
-		*(volatile uint32_t *)addr = val;
-	}
+    }
+	
+	*(volatile uint32_t *)addr = val;
 }
 
 /********************************************************************
@@ -182,8 +181,6 @@ void notmain(void) {
     output("time to run 10 times non-inlined:   %d\n", t_run10);
     output("total inline count=%d\n", inline_cnt);
 
-    todo("smash the original get32: should get same speedup\n");
-    
     // smash the GET32 code to call the GET32_inline_helper, identically
     // how GET32_inline does.  you can' just copy the code since the branch
     // is relative to the destination.
@@ -197,7 +194,13 @@ void notmain(void) {
     // 2. this will result in all caller sites to GET32 getting
     //    inlined as well.
     // 3. thus: when it runs below, should have the same speedup
-    todo("assign the new instructions to get_pc[0] and get_pc[1]\n");
+	//
+    uint32_t imm, code;
+    imm = (uint32_t)GET32_inline - ((uint32_t)get_pc + 8);
+    imm = (imm >> 2);
+    code = (0xE << 28) | (0xa << 24) | (0xffffff & imm);
+	*get_pc = code;
+	*(get_pc + 1) = 0xE1A00000; // nop
 
     output("after rewriting get32!\n");
     output("    inst[0] = %x\n", get_pc[0]);
