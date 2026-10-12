@@ -17,25 +17,7 @@ void int_5() { cnt++; }
 void int_6() { cnt++; }
 void int_7() { cnt++; }
 
-void generic_call_int(int_fp *intv, unsigned n) { 
-    for(unsigned i = 0; i < n; i++)
-        intv[i]();
-}
-
-// you will generate this dynamically.
-void specialized_call_int(void) {
-    int_0();
-    int_1();
-    int_2();
-    int_3();
-    int_4();
-    int_5();
-    int_6();
-    int_7();
-}
-
-void notmain(void) {
-    int_fp intv[] = {
+static int_fp intv[] = {
         int_0,
         int_1,
         int_2,
@@ -44,8 +26,79 @@ void notmain(void) {
         int_5,
         int_6,
         int_7
-    };
+};
 
+void generic_call_int(int_fp *intv, unsigned n) { 
+    for(unsigned i = 0; i < n; i++)
+        intv[i]();
+}
+
+// you will generate this dynamically.
+void specialized_call_int(void) {
+	uint32_t bl_pc, target, imm;
+	int n_int = sizeof(intv) / sizeof(intv[0]);
+	int n = 0;
+	uint32_t code[32];
+
+	/* push {lr} */
+	code[n++] = 0xe52de004;
+
+	for (int i = 0; i < n_int - 1; i++) {
+		/* bl int_i */
+		bl_pc = (uint32_t)&code[n];
+		target = (uint32_t)intv[i];
+		imm = target - (bl_pc + 8);
+		imm = (imm >> 2);
+		code[n++] = (0xE << 28) | (0xb) << 24 | (0xffffff & imm);
+	}
+
+	/* pop lr so that last interrupt bx lr goes back to caller */
+	code[n++] = 0xe8bd4000;
+
+	/* bl int[n_int - 1] */
+	bl_pc = (uint32_t)&code[n];
+	target = (uint32_t)intv[n_int - 1];
+	imm = target - (bl_pc + 8);
+	imm = (imm >> 2);
+	code[n++] = (0xE << 28) | (0xb) << 24 | (0xffffff & imm);
+
+	assert(n == (n_int + 2));
+}
+
+void threaded_call_int(void) {
+	uint32_t bl_pc, target, imm;
+	int n_int = sizeof(intv) / sizeof(intv[0]);
+	int n = 0;
+
+	/* should only ever need two instruction */
+	uint32_t code[2];
+
+	/* pop lr so that last interrupt bx lr goes back to caller */
+	code[n++] = 0xe8bd4000;
+
+	/* b int_0 */
+
+	/* b int_{i+1} for int {i}. The int_n still does bx lr which wll back to
+	 * caller */
+	for (int i = 0; i < n_int - 1; i++) {
+		/* b int_i */
+		uint32_t int_code = (uint32_t)intv[i];
+		/* bad though */
+		for (uint32_t addr = int_code;; addr = int_code + 4) {
+			if ( *(uint32_t*)addr == 0) { /* bx lr */
+				*(uint32_t*)addr = 0; /* b int_i+1 */
+				break;
+			}
+		}
+	}
+
+	/* last interrupt is kept normal
+:w
+
+
+}
+
+void notmain(void) {
     cycle_cnt_init();
 
     unsigned n = NELEM(intv);

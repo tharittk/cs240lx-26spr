@@ -33,6 +33,8 @@ uint32_t GET32_inline_helper(uint32_t addr, uint32_t lr) {
         todo("smash the call instruction to just do: ldr r0, [r0]\n");
         uint32_t pc = lr - 4;
 
+		*(uint32_t *)pc = 0; // ldr r0, [r0] binary;
+
         inline_cnt++;
 
         // turn inlining off while we print to make debugging easier.
@@ -49,7 +51,19 @@ uint32_t GET32_inline_helper(uint32_t addr, uint32_t lr) {
 // modify <runtime-inline-asm.S> as well.
 void PUT32_inline_helper(uint32_t addr, uint32_t val, uint32_t lr) {
     inline_on_p = 0;
-    todo("implement this\n");
+    if(inline_on_p) {
+        uint32_t pc = lr - 4;
+
+		*(uint32_t *)pc = 0; // str r1, [r0] binary;
+
+        inline_cnt++;
+
+        inline_on_p = 0;
+        output("PUT: rewriting address=%x, inline count=%d\n", pc, inline_cnt);
+        inline_on_p = 1;
+    } else {
+		*(volatile uint32_t *)addr = val;
+	}
 }
 
 /********************************************************************

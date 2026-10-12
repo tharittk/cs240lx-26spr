@@ -5,6 +5,6 @@ TTYUSB =
 BOOTLOADER = my-install
 
 # uncomment if you want it to automatically run.
-RUN=1
+RUN=0
 
 include $(CS240LX_2026_PATH)/libpi/mk/Makefile.robust-v3
