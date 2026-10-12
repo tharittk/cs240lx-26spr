@@ -35,13 +35,25 @@ void generic_call_int(int_fp *intv, unsigned n) {
 
 // you will generate this dynamically.
 void specialized_call_int(void) {
+		int_0();
+		int_1();
+		int_2();
+		int_3();
+		int_4();
+		int_5();
+		int_6();
+		int_7();
+}
+void specialized_call_int_helper(void) {
 	uint32_t bl_pc, target, imm;
 	int n_int = sizeof(intv) / sizeof(intv[0]);
 	int n = 0;
-	uint32_t code[32];
+	uint32_t *code = (uint32_t *)specialized_call_int;
 
 	/* push {lr} */
-	code[n++] = 0xe52de004;
+	*code = 0xe52de004;
+	code++;
+
 
 	for (int i = 0; i < n_int - 1; i++) {
 		/* bl int_i */
@@ -49,53 +61,59 @@ void specialized_call_int(void) {
 		target = (uint32_t)intv[i];
 		imm = target - (bl_pc + 8);
 		imm = (imm >> 2);
-		code[n++] = (0xE << 28) | (0xb) << 24 | (0xffffff & imm);
+		*code= (0xE << 28) | (0xb) << 24 | (0xffffff & imm);
+		code++;
 	}
 
 	/* pop lr so that last interrupt bx lr goes back to caller */
-	code[n++] = 0xe8bd4000;
+	*code = 0xe8bd4000;
+	code++;
 
 	/* bl int[n_int - 1] */
-	bl_pc = (uint32_t)&code[n];
+	bl_pc = (uint32_t)code;
 	target = (uint32_t)intv[n_int - 1];
 	imm = target - (bl_pc + 8);
 	imm = (imm >> 2);
-	code[n++] = (0xE << 28) | (0xb) << 24 | (0xffffff & imm);
-
-	assert(n == (n_int + 2));
+	*code = (0xE << 28) | (0xb) << 24 | (0xffffff & imm);
+	code++;
 }
 
-void threaded_call_int(void) {
-	uint32_t bl_pc, target, imm;
+/* only one instruction needed, the caller in notmain does bl thread_fn;
+so it puts the return address in lr, any b call will not trash that.*/
+static uint32_t thread_code[1];
+void thread_code_init(void) {
+	uint32_t b_pc, target, imm;
 	int n_int = sizeof(intv) / sizeof(intv[0]);
-	int n = 0;
-
-	/* should only ever need two instruction */
-	uint32_t code[2];
 
 	/* pop lr so that last interrupt bx lr goes back to caller */
-	code[n++] = 0xe8bd4000;
+	//thread_code[0] = 0xe8bd4000;
 
 	/* b int_0 */
+	b_pc = (uint32_t)thread_code;
+	target = (uint32_t)intv[0];
+	imm = target - (b_pc + 8);
+	imm = (imm >> 2);
+	thread_code[0] = (0xE << 28) | (0xa) << 24 | (0xffffff & imm);
 
-	/* b int_{i+1} for int {i}. The int_n still does bx lr which wll back to
+	/* call b int_{i+1} at the end of each int {i}. 
+	 * The int_n still does bx lr which wll back to
 	 * caller */
 	for (int i = 0; i < n_int - 1; i++) {
 		/* b int_i */
 		uint32_t int_code = (uint32_t)intv[i];
-		/* bad though */
-		for (uint32_t addr = int_code;; addr = int_code + 4) {
-			if ( *(uint32_t*)addr == 0) { /* bx lr */
-				*(uint32_t*)addr = 0; /* b int_i+1 */
-				break;
+		for (uint32_t addr = int_code;; addr += 4) {
+			if ( *(uint32_t*)addr == 0xe12fff1e) { /* bx lr */
+					b_pc = addr;
+					target = (uint32_t)intv[i+1];
+					imm = target - (b_pc + 8);
+					imm = (imm >> 2);
+					/* b int_i+1 */
+					*(uint32_t*)addr = (0xE << 28) | (0xa) << 24 | (0xffffff & imm);
+					break;
 			}
 		}
 	}
-
-	/* last interrupt is kept normal
-:w
-
-
+	/* last interrupt is kept bx lr. The lr has return address by the caller */
 }
 
 void notmain(void) {
@@ -115,7 +133,14 @@ void notmain(void) {
 
     // rewrite to generate specialized caller dynamically.
     cnt = 0;
+	
     TIME_CYC_PRINT10("cost of specialized int calling", specialized_call_int() );
+    demand(cnt == n*10, "cnt=%d, expected=%d\n", cnt, n*10);
+
+	cnt = 0;
+	thread_code_init();
+	void (*thread_fn)(void) = (typeof(thread_fn))thread_code;
+    TIME_CYC_PRINT10("cost of threaded specialized int calling", thread_fn());
     demand(cnt == n*10, "cnt=%d, expected=%d\n", cnt, n*10);
 
     clean_reboot();
