@@ -44,6 +44,7 @@ void specialized_call_int(void) {
 		int_6();
 		int_7();
 }
+
 void specialized_call_int_helper(void) {
 	uint32_t bl_pc, target, imm;
 	int n_int = sizeof(intv) / sizeof(intv[0]);
@@ -74,7 +75,7 @@ void specialized_call_int_helper(void) {
 	target = (uint32_t)intv[n_int - 1];
 	imm = target - (bl_pc + 8);
 	imm = (imm >> 2);
-	*code = (0xE << 28) | (0xb) << 24 | (0xffffff & imm);
+	*code = (0xE << 28) | (0xa) << 24 | (0xffffff & imm);
 	code++;
 }
 
@@ -134,6 +135,7 @@ void notmain(void) {
     // rewrite to generate specialized caller dynamically.
     cnt = 0;
 	
+	specialized_call_int_helper();
     TIME_CYC_PRINT10("cost of specialized int calling", specialized_call_int() );
     demand(cnt == n*10, "cnt=%d, expected=%d\n", cnt, n*10);
 
