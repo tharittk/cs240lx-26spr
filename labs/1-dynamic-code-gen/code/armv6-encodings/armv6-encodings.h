@@ -8,8 +8,8 @@ enum {
     armv6_r0 = 0,
 
     op_mov = 0b1101,
-    armv6_mvn = 0b1111,
-    armv6_orr = 0b1100,
+    op_mvn = 0b1111,
+    op_orr = 0b1100,
     op_mult = 0b0000,
 
     cond_always = 0b1110
@@ -25,7 +25,7 @@ static inline reg_t reg_mk(unsigned r) {
     return (reg_t){ .reg = r };
 }
 
-// how do you add a negative? do a sub?
+// how do you add a ngative? do a sub?
 static inline uint32_t armv6_mov(reg_t rd, reg_t rn) {
     // could return an error.  could get rid of checks.
     //         I        opcode        | rd
@@ -35,6 +35,23 @@ static inline uint32_t armv6_mov(reg_t rd, reg_t rn) {
         | rn.reg
         ;
 }
+
+static inline uint32_t armv6_orr(reg_t rd, reg_t rn) {
+    return cond_always << 28
+        | op_orr << 21 
+        | rd.reg << 12 
+        | rn.reg
+        ;
+}
+
+static inline uint32_t armv6_mvn(reg_t rd, reg_t rn) {
+    return cond_always << 28
+        | op_mvn << 21 
+        | rd.reg << 12 
+        | rn.reg
+        ;
+}
+
 
 static inline uint32_t 
 armv6_mov_imm8_rot4(reg_t rd, uint32_t imm8, unsigned rot4) {
@@ -46,7 +63,12 @@ armv6_mov_imm8_rot4(reg_t rd, uint32_t imm8, unsigned rot4) {
     if(rot4>>4)
         panic("rotation %d does not fit in 4 bits!\n", rot4);
 
-    todo("implement mov with rotate\n");
+	reg_t r0 = reg_mk(armv6_r0);
+	uint32_t code  = armv6_mov(rd, r0);
+	code |= (1 << 25);
+	code |= ((0xf & rot4) << 8);
+	code |= (0xff & imm8);
+	return code;
 }
 static inline uint32_t 
 armv6_mov_imm8(reg_t rd, uint32_t imm8) {
@@ -55,12 +77,16 @@ armv6_mov_imm8(reg_t rd, uint32_t imm8) {
 
 static inline uint32_t 
 armv6_mvn_imm8(reg_t rd, uint32_t imm8) {
-    todo("implement mvn\n");
+	reg_t r0 = reg_mk(armv6_r0);
+	uint32_t code = armv6_mvn(rd, r0);
+	code |= (1 << 25);
+	code |= (0xff & imm8);
+	return code;
 }
 
 static inline uint32_t 
 armv6_bx(reg_t rd) {
-    todo("implement bx\n");
+		return (uint32_t)((0xe12fff1 << 4) | (0xf & rd.reg));
 }
 
 // use 8-bit immediate imm8, with a 4-bit rotation.
@@ -74,21 +100,29 @@ armv6_orr_imm8_rot4(reg_t rd, reg_t rn, unsigned imm8, unsigned rot4) {
     if(rot4>>4)
         panic("rotation %d does not fit in 4 bits!\n", rot4);
 
-    todo("implement orr with rotation\n");
+	uint32_t code  = armv6_orr(rd, rn);
+	code |= (1 << 25);
+	code |= ((0xf & rot4) << 8);
+	code |= (0xff & imm8);
+	return code;
 }
 
 static inline uint32_t 
 armv6_orr_imm8(reg_t rd, reg_t rn, unsigned imm8) {
     if(imm8>>8)
         panic("immediate %d does not fit in 8 bits!\n", imm8);
-
-    todo("implement orr with immediate\n");
+	armv6_orr_imm8_rot4(rd, rn, imm8, 0);
 }
 
 // a4-80
 static inline uint32_t 
 armv6_mult(reg_t rd, reg_t rm, reg_t rs) {
-    todo("implement mult\n");
+	uint32_t code = 0xe00 << 20;
+	code |= (rd.reg << 16);
+	code |= (rs.reg << 8);
+	code |= (0x9 << 4);
+	code |= (rm.reg);
+	return code;
 }
 
 
@@ -96,8 +130,19 @@ armv6_mult(reg_t rd, reg_t rm, reg_t rs) {
 // ldr rd, [rn,#offset]
 static inline uint32_t 
 armv6_ldr_off12(reg_t rd, reg_t rn, int offset) {
-    // a5-20
-    todo("implement lrd_off12\n");
+	uint32_t u = 1; // 1 = add offset, 0 = substract
+	if (offset < 0) {
+			u = 0;
+			/* caller calculate offset from code. so they may feed negative */
+			offset = -offset;
+	}
+	if (offset & ~0xFFF)
+		panic("offset %d is out-of-range: limited to 12 immediates\n", offset);
+
+	uint32_t ldr = (0xe << 28) | (1 << 26) | (1 << 24) | (u << 23) | \
+				   (1 << 20) | (rn.reg << 16) | (rd.reg << 12) | \
+				   (offset & 0xFFF);
+	return ldr;
 }
 
 /**********************************************************************
@@ -109,7 +154,15 @@ armv6_ldr_off12(reg_t rd, reg_t rn, int offset) {
 
 static inline uint32_t *
 armv6_load_imm32(uint32_t *code, reg_t rd, uint32_t imm32) {
-    todo("implement loading arbitrary constant\n");
+
+	reg_t r0 = reg_mk(armv6_r0);
+	code[0] = armv6_orr_imm8_rot4(r0, r0, imm32 & 0xff, 0);
+	/* right rotation wraps around, the second byte need rotate 24=12x1*/
+	code[1] = armv6_orr_imm8_rot4(r0, r0, (imm32 >> 8) & 0xff, 12);
+	code[1] = armv6_orr_imm8_rot4(r0, r0, (imm32 >> 16) & 0xff, 8);
+	code[1] = armv6_orr_imm8_rot4(r0, r0, (imm32 >> 24) & 0xff, 4);
+	code[4] = armv6_mov(rd, r0);
+
     return code;
 }
 
