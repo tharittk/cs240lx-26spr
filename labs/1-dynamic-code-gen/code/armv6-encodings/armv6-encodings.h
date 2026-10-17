@@ -100,7 +100,8 @@ armv6_orr_imm8_rot4(reg_t rd, reg_t rn, unsigned imm8, unsigned rot4) {
     if(rot4>>4)
         panic("rotation %d does not fit in 4 bits!\n", rot4);
 
-	uint32_t code  = armv6_orr(rd, rn);
+    uint32_t code = (cond_always << 28) | (op_orr << 21)
+        | (rn.reg << 16) | (rd.reg << 12);
 	code |= (1 << 25);
 	code |= ((0xf & rot4) << 8);
 	code |= (0xff & imm8);
@@ -111,7 +112,7 @@ static inline uint32_t
 armv6_orr_imm8(reg_t rd, reg_t rn, unsigned imm8) {
     if(imm8>>8)
         panic("immediate %d does not fit in 8 bits!\n", imm8);
-	armv6_orr_imm8_rot4(rd, rn, imm8, 0);
+    return armv6_orr_imm8_rot4(rd, rn, imm8, 0);
 }
 
 // a4-80
@@ -155,15 +156,16 @@ armv6_ldr_off12(reg_t rd, reg_t rn, int offset) {
 static inline uint32_t *
 armv6_load_imm32(uint32_t *code, reg_t rd, uint32_t imm32) {
 
-	reg_t r0 = reg_mk(armv6_r0);
-	code[0] = armv6_orr_imm8_rot4(r0, r0, imm32 & 0xff, 0);
+	//reg_t r0 = reg_mk(armv6_r0);
+	code[0] = armv6_mov_imm8(rd, 0);
+	code[1] = armv6_orr_imm8_rot4(rd, rd, imm32 & 0xff, 0);
 	/* right rotation wraps around, the second byte need rotate 24=12x1*/
-	code[1] = armv6_orr_imm8_rot4(r0, r0, (imm32 >> 8) & 0xff, 12);
-	code[1] = armv6_orr_imm8_rot4(r0, r0, (imm32 >> 16) & 0xff, 8);
-	code[1] = armv6_orr_imm8_rot4(r0, r0, (imm32 >> 24) & 0xff, 4);
-	code[4] = armv6_mov(rd, r0);
+	code[2] = armv6_orr_imm8_rot4(rd, rd, (imm32 >> 8) & 0xff, 24);
+	code[3] = armv6_orr_imm8_rot4(rd, rd, (imm32 >> 16) & 0xff, 16);
+	code[4] = armv6_orr_imm8_rot4(rd, rd, (imm32 >> 24) & 0xff, 8);
+	//code[4] = armv6_mov(rd, r0);
 
-    return code;
+    return code + 5;
 }
 
 // MLA (Multiply Accumulate) multiplies two signed or unsigned 32-bit
@@ -173,7 +175,9 @@ armv6_load_imm32(uint32_t *code, reg_t rd, uint32_t imm32) {
 //      rd = rm * rs + rn.
 static inline uint32_t
 armv6_mla(reg_t rd, reg_t rm, reg_t rs, reg_t rn) {    
-    todo("implement multiply accumulate\n");
+	uint32_t code = (0xe << 28) | (1 << 21) | (rd.reg << 16) | (rn.reg << 12)
+			| (rs.reg << 8) | (0x9) << 4 | rm.reg;
+	return code;
 }
 
 #endif
