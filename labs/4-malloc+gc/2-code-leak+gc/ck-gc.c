@@ -126,6 +126,10 @@ unsigned check_should_leak(void) {
  */
 
 
+extern uint32_t __data_start__[];
+extern uint32_t __data_end__[];
+extern uint32_t __bss_start__[];
+extern uint32_t __bss_end__[];
 // mark phase:
 //  - iterate over the words in the range [p,e], marking any block 
 //    potentially referenced.
@@ -147,7 +151,23 @@ static void mark(const char *where, uint32_t *p, uint32_t *e) {
     // blocks the integer could point to (start, or internal)
     //
     // for each marked block: sweep through that too.
-    todo("implement the rest\n");
+	for (uint32_t *addr = p; p <= e; p++) {
+		// if looks like referring to legit addr
+		hdr_t *hdr = is_ptr(*addr);
+		if (hdr != NULL) {
+			// increment appropriate reference counter
+			if (*addr == (uint32_t)ck_data_start(hdr)) {
+				hdr->refs_start++;
+			} else {
+				hdr->refs_middle++;
+			}
+			// recursive
+			if (!hdr->mark) {
+				hdr->mark = 1;
+				mark(where, ck_data_start(hdr), ck_data_end(hdr)); 
+			}
+		}
+	}
 }
 
 // do a sweep, warning about any leaks.
@@ -168,8 +188,19 @@ static unsigned sweep_leak(int warn_no_start_ref_p) {
     // for maybe leaks use:
     //      ck_error(h, "GC:MAYBE LEAK of block %u [addr=%p] (no pointer to the start)\n", h->block_id, ptr);
     //
-    for(hdr_t *h = ck_first_alloc(); h; h = ck_next_hdr(h), nblocks++)
-        todo("implement the rest\n");
+    for(hdr_t *h = ck_first_alloc(); h; h = ck_next_hdr(h), nblocks++){
+		if (h->state == FREED)
+			continue;
+
+		// ALLOCATED block
+		if (h->refs_start == 0 && h->refs_middle == 0) {
+			errors++;
+		}
+
+		if (h->refs_start == 0 && h->refs_middle != 0 && warn_no_start_ref_p) {
+			maybe_errors++;
+		}
+	}
 
 	trace("\tGC:Checked %d blocks.\n", nblocks);
 	if(!errors && !maybe_errors)
@@ -182,6 +213,10 @@ static unsigned sweep_leak(int warn_no_start_ref_p) {
 }
 
 
+extern uint32_t __data_start__[];
+extern uint32_t __data_end__[];
+extern uint32_t __bss_start__[];
+extern uint32_t __bss_end__[];
 // a very slow leak checker.
 static void mark_all(uint32_t *sp) {
     // slow: should not need this: remove after your code
@@ -207,7 +242,8 @@ static void mark_all(uint32_t *sp) {
     //  - <libpi/include/memmap.h>
     //  -:<libpi/memmap>
     mark("stack", sp, stack_top);
-    todo("sweep bss and data");
+	mark("bss", __bss_start__, __bss_end__);
+	mark("data", __data_start__, __data_end__);
 }
 
 
@@ -222,7 +258,23 @@ static unsigned sweep_free(void) {
     // for each free that you do print it:
     //      trace("GC:FREEing block id=%u [addr=%p]\n", h->block_id, ptr);
 
-    todo("sweep through allocated list: free any block that has no pointers\n");
+	// this doesn't work because if h was freed, there won't be ck_next_hdr(h)
+	//
+	hdr_t *saved_next = ck_first_alloc();
+    for(hdr_t *h = ck_first_alloc(); saved_next; nblocks++){
+		// save before free
+		saved_next = ck_next_hdr(h);
+
+		if (h->state == FREED)
+			continue;
+
+		// ALLOCATED block
+		if (h->refs_start == 0 && h->refs_middle == 0) {
+			nfreed++;
+			nbytes_freed += h->nbytes_alloc;
+			ckfree(h);
+		}
+	}
 
 	trace("\tGC:Checked %d blocks, freed %d, %d bytes\n", nblocks, nfreed, nbytes_freed);
 

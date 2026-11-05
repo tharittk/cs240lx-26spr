@@ -1,7 +1,8 @@
 #include "rpi-asm.h"
 
 @ trampoline used to:
-@   - save all callee saved registers to stack.
+@   - save all callee saved registers to stack (so mark("stack",...) see the
+@	register
 @   - call ck_gc_fn(sp)
 @   - return
 @

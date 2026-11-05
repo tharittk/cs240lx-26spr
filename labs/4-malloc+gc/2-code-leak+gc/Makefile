@@ -7,7 +7,7 @@
 #PROGS := tests/gc-test4-no-leak.c  
 #PROGS := tests/gc-test2-no-leak.c  
 #PROGS := tests/gc-test1-no-leak.c  
-#PROGS := $(wildcard tests/gc-test[0-9]*.c)
+PROGS := $(wildcard tests/gc-test[0-9]*.c)
 
 # Part 1: simple checking allocation
 #PROGS := tests/ck-test1-ok.c
@@ -26,11 +26,11 @@ COMMON_SRC = ../1-malloc/kr-malloc.c
 COMMON_SRC += ckalloc.c
 #STAFF_OBJS += staff-ckalloc.o
 
-#COMMON_SRC += ck-gc.c
-STAFF_OBJS += staff-ck-gc.o
+COMMON_SRC += ck-gc.c
+#STAFF_OBJS += staff-ck-gc.o
 
-#COMMON_SRC += gc-asm.S
-STAFF_OBJS += staff-gc-asm.o
+COMMON_SRC += gc-asm.S
+#STAFF_OBJS += staff-gc-asm.o
 
 # if you get issues, try swapping this.
 OPT_LEVEL = -O0
@@ -41,7 +41,7 @@ CFLAGS += -fno-inline-functions
 CFLAGS += -fno-inline-small-functions
 CFLAGS += -fno-default-inline
 
-RUN=1
+RUN=0
 EXCLUDE ?= grep -v simple_boot
 include $(CS240LX_2026_PATH)/libpi/mk/Makefile.robust-v3
 
