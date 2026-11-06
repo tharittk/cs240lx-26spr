@@ -151,16 +151,17 @@ static void mark(const char *where, uint32_t *p, uint32_t *e) {
     // blocks the integer could point to (start, or internal)
     //
     // for each marked block: sweep through that too.
-	for (uint32_t *addr = p; p <= e; p++) {
+	for (uint32_t *q = p; q <= e; q++) {
 		// if looks like referring to legit addr
-		hdr_t *hdr = is_ptr(*addr);
+		hdr_t *hdr = is_ptr(*q);
 		if (hdr != NULL) {
 			// increment appropriate reference counter
-			if (*addr == (uint32_t)ck_data_start(hdr)) {
+			if (*q == (uint32_t)ck_data_start(hdr)) {
 				hdr->refs_start++;
 			} else {
 				hdr->refs_middle++;
 			}
+			//trace("marking %p, ref: %x\n", q, *q);
 			// recursive
 			if (!hdr->mark) {
 				hdr->mark = 1;
