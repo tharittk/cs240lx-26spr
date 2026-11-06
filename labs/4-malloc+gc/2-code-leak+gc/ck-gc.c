@@ -44,9 +44,10 @@ void *sbrk(long increment) {
     static int init_p;
 
     assert(increment > 0);
-    if(init_p) 
-        panic("not handling\n");
-    else {
+    //if(init_p) 
+    //	panic("not handling\n");
+    //else {
+	if (!init_p) {
         unsigned onemb = 0x100000;
         heap_start = (void*)onemb;
         heap_end = (char*)heap_start + onemb;
@@ -196,10 +197,12 @@ static unsigned sweep_leak(int warn_no_start_ref_p) {
 		// ALLOCATED block
 		if (h->refs_start == 0 && h->refs_middle == 0) {
 			errors++;
+            ck_error(h, "GC:DEFINITE LEAK of block=%u [addr=%p]\n", h->block_id, ck_data_start(h));
 		}
 
 		if (h->refs_start == 0 && h->refs_middle != 0 && warn_no_start_ref_p) {
 			maybe_errors++;
+			ck_error(h, "GC:MAYBE LEAK of block %u [addr=%p] (no pointer to the start)\n", h->block_id, ck_data_start(h));
 		}
 	}
 
@@ -262,7 +265,7 @@ static unsigned sweep_free(void) {
 	// this doesn't work because if h was freed, there won't be ck_next_hdr(h)
 	//
 	hdr_t *saved_next = ck_first_alloc();
-    for(hdr_t *h = ck_first_alloc(); saved_next; nblocks++){
+    for(hdr_t *h = ck_first_alloc(); h; nblocks++){
 		// save before free
 		saved_next = ck_next_hdr(h);
 
@@ -273,8 +276,11 @@ static unsigned sweep_free(void) {
 		if (h->refs_start == 0 && h->refs_middle == 0) {
 			nfreed++;
 			nbytes_freed += h->nbytes_alloc;
-			ckfree(h);
+			trace("GC:FREEing block id=%u [addr=%p]\n", h->block_id, ck_data_start(h));
+			ckfree(ck_data_start(h));
 		}
+
+		h = saved_next;
 	}
 
 	trace("\tGC:Checked %d blocks, freed %d, %d bytes\n", nblocks, nfreed, nbytes_freed);

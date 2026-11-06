@@ -1,22 +1,22 @@
-# Part 2: garbage collection
-#PROGS := tests/gc-test9-gc-interior.c
-#PROGS := tests/gc-test8-gc-reachable.c
-#PROGS := tests/gc-test7-gc-global.c
-#PROGS := tests/gc-test6-no-leak.c
-#PROGS := tests/gc-test5-gc.c
-#PROGS := tests/gc-test4-no-leak.c  
-#PROGS := tests/gc-test2-no-leak.c  
-#PROGS := tests/gc-test1-no-leak.c  
-PROGS := $(wildcard tests/gc-test[0-9]*.c)
-
 # Part 1: simple checking allocation
 #PROGS := tests/ck-test1-ok.c
 #PROGS := tests/ck-test2-ok.c
 #PROGS := tests/ck-test3-ok.c
-PROGS := $(wildcard tests/ck-test[0-9]*.c)
+#PROGS := $(wildcard tests/ck-test[0-9]*.c)
+
+# Part 2: garbage collection
+#PROGS := tests/gc-test9-gc-interior.c
+#PROGS += tests/gc-test8-gc-reachable.c
+#PROGS += tests/gc-test7-gc-global.c
+#PROGS += tests/gc-test6-no-leak.c
+#PROGS += tests/gc-test5-gc.c
+#PROGS += tests/gc-test4-no-leak.c  
+#PROGS += tests/gc-test2-no-leak.c  
+#PROGS += tests/gc-test1-no-leak.c  
+#PROGS := $(wildcard tests/gc-test[0-9]*.c)
 
 # all to start
-#PROGS += $(wildcard tests/gc-test[0-9]*.c)
+PROGS += $(wildcard tests/gc-test[0-9]*.c)
 
 # you should  comment out all staff objs and replace with your code.
 
@@ -41,7 +41,7 @@ CFLAGS += -fno-inline-functions
 CFLAGS += -fno-inline-small-functions
 CFLAGS += -fno-default-inline
 
-RUN=0
+RUN=1
 EXCLUDE ?= grep -v simple_boot
 include $(CS240LX_2026_PATH)/libpi/mk/Makefile.robust-v3
 
